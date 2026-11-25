@@ -1,0 +1,462 @@
+absolute BYTE. Bước này gồm 4 phần: `TextField` dùng lại, hàm `validateEvent` dùng chung, form thêm mới có validate khi blur, và trang thêm mới. Chưa có lời gọi API.
+
+## Cách làm
+
+- **Lỗi được tính lại mỗi lần render** từ `values` bằng `validateEvent`, không lưu trong state. Cách này tránh lỗi "state lỗi cũ" và tự cập nhật khi đổi hình thức.
+- **`touched` quyết định có hiện lỗi hay không.** Rời khỏi ô thì đánh dấu đã chạm. Bấm gửi thì đánh dấu tất cả.
+- **`mode` tách luật riêng.** Luật "ngày không ở quá khứ" chỉ chạy khi `mode === 'create'`, còn phần còn lại dùng chung cho sửa sau này.
+
+## 1. `src/types/form.ts` (viết lại đầy đủ)
+
+```ts
+import type { ChangeEvent, FocusEvent } from 'react';
+import type { EventFormat } from './event';
+
+export interface EventFormValues {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  format: EventFormat;
+  location: string;
+  link: string;
+  maxSeats: string;
+}
+
+export type EventFormErrors = Partial<Record<keyof EventFormValues, string>>;
+
+export type TouchedFields = Record<keyof EventFormValues, boolean>;
+
+export type FormMode = 'create' | 'edit';
+
+export type FieldChangeEvent = ChangeEvent<HTMLInputElement>;
+
+export type FieldBlurEvent = FocusEvent<HTMLInputElement>;
+```
+
+## 2. `src/utils/date.ts`
+
+```ts
+export const getTodayISO = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+```
+
+Hàm này lấy ngày theo giờ máy, không dùng `toISOString()` nên không bị lệch ngày ở Việt Nam.
+
+## 3. `src/utils/validateEvent.ts`
+
+```ts
+import type { EventFormErrors, EventFormValues, FormMode } from '../types/form';
+import { getTodayISO } from './date';
+
+const TITLE_MIN = 5;
+const TITLE_MAX = 100;
+const SEATS_MIN = 1;
+const SEATS_MAX = 500;
+
+const isValidHttpUrl = (value: string): boolean => {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+export const validateEvent = (
+  values: EventFormValues,
+  mode: FormMode,
+): EventFormErrors => {
+  const errors: EventFormErrors = {};
+
+  const title = values.title.trim();
+  if (!title) {
+    errors.title = 'Vui lòng nhập tên sự kiện.';
+  } else if (title.length < TITLE_MIN || title.length > TITLE_MAX) {
+    errors.title = `Tên sự kiện phải từ ${TITLE_MIN} đến ${TITLE_MAX} ký tự.`;
+  }
+
+  if (!values.date) {
+    errors.date = 'Vui lòng chọn ngày tổ chức.';
+  } else if (mode === 'create' && values.date < getTodayISO()) {
+    // So sánh chuỗi YYYY-MM-DD là đúng thứ tự thời gian
+    errors.date = 'Ngày tổ chức không được là ngày trong quá khứ.';
+  }
+
+  if (!values.startTime) {
+    errors.startTime = 'Vui lòng chọn giờ bắt đầu.';
+  }
+
+  if (!values.endTime) {
+    errors.endTime = 'Vui lòng chọn giờ kết thúc.';
+  } else if (values.startTime && values.endTime <= values.startTime) {
+    errors.endTime = 'Giờ kết thúc phải sau giờ bắt đầu.';
+  }
+
+  if (values.format === 'offline') {
+    if (!values.location.trim()) {
+      errors.location = 'Vui lòng nhập địa điểm tổ chức.';
+    }
+  } else {
+    const link = values.link.trim();
+    if (!link) {
+      errors.link = 'Vui lòng nhập đường dẫn tham gia.';
+    } else if (!isValidHttpUrl(link)) {
+      errors.link = 'Đường dẫn phải bắt đầu bằng http:// hoặc https://.';
+    }
+  }
+
+  const seats = values.maxSeats.trim();
+  if (!seats) {
+    errors.maxSeats = 'Vui lòng nhập số chỗ tối đa.';
+  } else if (!/^\d+$/.test(seats)) {
+    errors.maxSeats = 'Số chỗ phải là số nguyên, không có dấu thập phân hay dấu âm.';
+  } else if (Number(seats) < SEATS_MIN || Number(seats) > SEATS_MAX) {
+    errors.maxSeats = `Số chỗ phải từ ${SEATS_MIN} đến ${SEATS_MAX}.`;
+  }
+
+  return errors;
+};
+```
+
+Regex `^\d+$` loại được `1.5`, `-3`, `1e2`. `Number('')` không bao giờ lọt vào vì đã kiểm tra trống trước.
+
+## 4. `src/utils/eventForm.ts`
+
+```ts
+import type { EventFormValues } from '../types/form';
+
+export const EMPTY_EVENT_FORM: EventFormValues = {
+  title: '',
+  date: '',
+  startTime: '',
+  endTime: '',
+  format: 'offline',
+  location: '',
+  link: '',
+  maxSeats: '',
+};
+```
+
+## 5. `src/components/TextField.tsx`
+
+```tsx
+import type { FieldBlurEvent, FieldChangeEvent } from '../types/form';
+
+interface TextFieldProps {
+  id: string;
+  label: string;
+  name: string;
+  value: string;
+  onChange: (event: FieldChangeEvent) => void;
+  onBlur: (event: FieldBlurEvent) => void;
+  error?: string;
+  type?: 'text' | 'date' | 'time' | 'number' | 'url';
+  placeholder?: string;
+  required?: boolean;
+}
+
+export function TextField({
+  id,
+  label,
+  error,
+  required = false,
+  type = 'text',
+  ...inputProps
+}: TextFieldProps) {
+  const errorId = `${id}-error`;
+  const baseClass =
+    'rounded-md border px-3 py-2 text-sm outline-none focus:ring-2';
+  const stateClass = error
+    ? 'border-red-500 focus:ring-red-200'
+    : 'border-slate-300 focus:ring-indigo-200';
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-sm font-medium text-slate-700">
+        {label}
+        {required && <span className="text-red-600"> *</span>}
+      </label>
+      <input
+        id={id}
+        type={type}
+        aria-invalid={Boolean(error)}
+        aria-required={required}
+        aria-describedby={error ? errorId : undefined}
+        className={`${baseClass} ${stateClass}`}
+        {...inputProps}
+      />
+      {error && (
+        <p id={errorId} className="text-sm text-red-600">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+```
+
+Không truyền `required` thẳng xuống `<input>` để tránh bong bóng báo lỗi của trình duyệt. Thay vào đó dùng `aria-required`.
+
+## 6. `src/components/EventForm.tsx`
+
+```tsx
+import { useState, type FormEvent } from 'react';
+import type {
+  EventFormValues,
+  FieldChangeEvent,
+  FormMode,
+  TouchedFields,
+} from '../types/form';
+import { validateEvent } from '../utils/validateEvent';
+import { TextField } from './TextField';
+
+interface EventFormProps {
+  mode: FormMode;
+  initialValues: EventFormValues;
+  submitting?: boolean;
+  onSubmit: (values: EventFormValues) => void;
+}
+
+type TextFieldKey = Exclude<keyof EventFormValues, 'format'>;
+
+const NONE_TOUCHED: TouchedFields = {
+  title: false,
+  date: false,
+  startTime: false,
+  endTime: false,
+  format: false,
+  location: false,
+  link: false,
+  maxSeats: false,
+};
+
+const ALL_TOUCHED: TouchedFields = {
+  title: true,
+  date: true,
+  startTime: true,
+  endTime: true,
+  format: true,
+  location: true,
+  link: true,
+  maxSeats: true,
+};
+
+export function EventForm({
+  mode,
+  initialValues,
+  submitting = false,
+  onSubmit,
+}: EventFormProps) {
+  const [values, setValues] = useState<EventFormValues>(initialValues);
+  const [touched, setTouched] = useState<TouchedFields>(NONE_TOUCHED);
+
+  const errors = validateEvent(values, mode);
+  const showError = (field: keyof EventFormValues) =>
+    touched[field] ? errors[field] : undefined;
+
+  const handleTextChange =
+    (field: TextFieldKey) => (event: FieldChangeEvent) => {
+      const { value } = event.target;
+      setValues((prev) => ({ ...prev, [field]: value }));
+    };
+
+  const handleFormatChange = (event: FieldChangeEvent) => {
+    const format = event.target.value === 'online' ? 'online' : 'offline';
+    setValues((prev) => ({ ...prev, format }));
+  };
+
+  const handleBlur = (field: keyof EventFormValues) => () => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setTouched(ALL_TOUCHED);
+    if (Object.keys(errors).length > 0) return;
+    onSubmit(values);
+  };
+
+  const isOffline = values.format === 'offline';
+
+  return (
+    <form noValidate onSubmit={handleSubmit} className="space-y-5">
+      <TextField
+        id="title"
+        label="Tên sự kiện"
+        name="title"
+        value={values.title}
+        onChange={handleTextChange('title')}
+        onBlur={handleBlur('title')}
+        error={showError('title')}
+        placeholder="Ví dụ: Workshop React cơ bản"
+        required
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <TextField
+          id="date"
+          label="Ngày tổ chức"
+          name="date"
+          type="date"
+          value={values.date}
+          onChange={handleTextChange('date')}
+          onBlur={handleBlur('date')}
+          error={showError('date')}
+          required
+        />
+        <TextField
+          id="startTime"
+          label="Giờ bắt đầu"
+          name="startTime"
+          type="time"
+          value={values.startTime}
+          onChange={handleTextChange('startTime')}
+          onBlur={handleBlur('startTime')}
+          error={showError('startTime')}
+          required
+        />
+        <TextField
+          id="endTime"
+          label="Giờ kết thúc"
+          name="endTime"
+          type="time"
+          value={values.endTime}
+          onChange={handleTextChange('endTime')}
+          onBlur={handleBlur('endTime')}
+          error={showError('endTime')}
+          required
+        />
+      </div>
+
+      <fieldset>
+        <legend className="text-sm font-medium text-slate-700">Hình thức</legend>
+        <div className="mt-2 flex gap-6">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="format"
+              value="offline"
+              checked={isOffline}
+              onChange={handleFormatChange}
+              onBlur={handleBlur('format')}
+            />
+            Trực tiếp
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="radio"
+              name="format"
+              value="online"
+              checked={!isOffline}
+              onChange={handleFormatChange}
+              onBlur={handleBlur('format')}
+            />
+            Trực tuyến
+          </label>
+        </div>
+      </fieldset>
+
+      {isOffline ? (
+        <TextField
+          id="location"
+          label="Địa điểm"
+          name="location"
+          value={values.location}
+          onChange={handleTextChange('location')}
+          onBlur={handleBlur('location')}
+          error={showError('location')}
+          required
+        />
+      ) : (
+        <TextField
+          id="link"
+          label="Đường dẫn tham gia"
+          name="link"
+          type="url"
+          value={values.link}
+          onChange={handleTextChange('link')}
+          onBlur={handleBlur('link')}
+          error={showError('link')}
+          placeholder="https://..."
+          required
+        />
+      )}
+
+      <TextField
+        id="maxSeats"
+        label="Số chỗ tối đa"
+        name="maxSeats"
+        type="number"
+        value={values.maxSeats}
+        onChange={handleTextChange('maxSeats')}
+        onBlur={handleBlur('maxSeats')}
+        error={showError('maxSeats')}
+        required
+      />
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {submitting
+          ? 'Đang lưu...'
+          : mode === 'create'
+            ? 'Thêm sự kiện'
+            : 'Lưu thay đổi'}
+      </button>
+    </form>
+  );
+}
+```
+
+Đây là chỗ dễ sót nhất: `initialValues` chỉ được đọc đúng một lần khi `useState` khởi tạo. Bước 5 của form sửa phải chỉ render form sau khi GET xong, hoặc đặt `key` theo id bản ghi, nếu không state sẽ giữ giá trị rỗng.
+
+## 7. `src/pages/EventFormPage.tsx`
+
+```tsx
+import { EventForm } from '../components/EventForm';
+import type { EventFormValues } from '../types/form';
+import { EMPTY_EVENT_FORM } from '../utils/eventForm';
+
+export function EventFormPage() {
+  // Bước 4 chưa gọi API. Bước 5 sẽ thay thân hàm này bằng POST.
+  const handleSubmit = (_values: EventFormValues) => {
+    // TODO: POST ở bước 5
+  };
+
+  return (
+    <section className="mx-auto max-w-2xl space-y-6">
+      <h1 className="text-2xl font-bold text-slate-900">Thêm sự kiện mới</h1>
+      <EventForm
+        mode="create"
+        initialValues={EMPTY_EVENT_FORM}
+        onSubmit={handleSubmit}
+      />
+    </section>
+  );
+}
+```
+
+Thêm route trong `App.tsx`: `<Route path="/su-kien/them-moi" element={<EventFormPage />} />`. Route này phải khai báo trước `/su-kien/:id`.
+
+## Checklist tự kiểm tra bằng tay
+
+Mở `/su-kien/them-moi`, không gõ gì và rời từng ô, rồi thử lần lượt:
+
+- Tên 4 ký tự, và tên 101 ký tự.
+- Ngày hôm qua. Ngày hôm nay phải được chấp nhận.
+- Giờ kết thúc bằng giờ bắt đầu.
+- Chọn Trực tuyến, nhập `abc` vào đường dẫn.
+- Số chỗ là `1.5`, `0`, `501`, `-3`.
+- Bấm gửi khi form còn lỗi: không có gì xảy ra và tất cả lỗi hiện ra.
+
+Nếu `_values` bị ESLint báo "unused" trong khi `tsc` không báo, bước 5 sẽ dùng nó nên không cần xử lý. Đừng tắt rule.
+
+Ghi chú xác minh: mình chỉ viết code, chưa chạy `tsc`, `npm run dev` hay `npm run build`, nên chưa xác nhận form render và validate đúng. Sau khi làm xong, hãy dán cho mình lỗi nếu có, hoặc báo "pass" cho từng mục trong checklist trên.

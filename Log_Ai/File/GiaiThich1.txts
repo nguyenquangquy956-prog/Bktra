@@ -1,0 +1,35 @@
+Tổng quan
+EventForm.tsx là component form dùng chung cho cả thêm mới và chỉnh sửa. Nó nhận dữ liệu ban đầu, quản lý các ô nhập, kiểm tra lỗi và gọi onSubmit khi form hợp lệ.
+Chức năng chính
+• Giữ giá trị form trong useState (values), khởi tạo từ initialValues.
+• Theo dõi ô đã chạm trong touched. Lỗi chỉ hiện sau khi người dùng rời ô, hoặc sau khi bấm gửi.
+• Tính lỗi mỗi lần render bằng validateEvent(values, mode), không lưu lỗi vào state.
+• Đổi ô địa điểm hoặc đường dẫn theo radio "Trực tiếp" hay "Trực tuyến".
+• Khóa nút gửi khi submitting là true, đổi chữ thành "Đang lưu...".
+• Gọi onSubmit(values) chỉ khi không còn lỗi.
+Props
+Prop
+Kiểu
+Vai trò
+mode
+'create' | 'edit'
+Quyết định tiêu đề nút và luật ngày quá khứ
+initialValues
+EventFormValues
+Giá trị đặt vào state lúc khởi tạo
+submitting
+boolean (tùy chọn)
+Trạng thái đang gửi, mặc định false
+onSubmit
+(values) => void
+Hàm cha xử lý khi form hợp lệ
+Các điểm cần hiểu
+• noValidate trên <form>. Tắt bong bóng báo lỗi mặc định của trình duyệt, để thông báo tiếng Việt là thông báo duy nhất.
+• handleTextChange là hàm bậc cao. handleTextChange('title') trả về một hàm xử lý riêng cho ô title, nên không cần viết lại logic cho từng ô.
+• handleFormatChange ép giá trị. Chỉ nhận 'online' hoặc 'offline', nên format luôn đúng kiểu EventFormat.
+• handleSubmit đánh dấu toàn bộ ô đã chạm rồi mới kiểm tra lỗi. Nếu thiếu bước này, bấm gửi khi chưa chạm ô nào sẽ không thấy lỗi.
+• Kiểm tra lỗi trong handleSubmit dùng errors của lần render hiện tại. Đúng vì errors được tính từ values mới nhất khi component render.
+Điểm dễ nhầm
+Ô maxSeats dùng type="number" nhưng values.maxSeats vẫn là chuỗi. Điều này đúng với thiết kế, vì validate dùng regex trên chuỗi. Đừng đổi kiểu state thành số.
+Ghi chú xác minh
+Giải thích dựa trên code đã đưa ở các bước trước. Chưa chạy form, chưa chạy tsc hay npm run build, nên hành vi thực tế chưa được xác nhận.

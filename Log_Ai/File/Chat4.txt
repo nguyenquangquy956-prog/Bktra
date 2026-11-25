@@ -1,0 +1,76 @@
+absolute BYTE. Hai file này chưa có, nên mình viết luôn. Theo đề, thư mục là `src/layouts/` cho layout và `src/pages/` cho trang 404.
+
+## `src/layouts/MainLayout.tsx`
+
+```tsx
+import { NavLink, Outlet } from 'react-router-dom';
+
+const navLinkClass = ({ isActive }: { isActive: boolean }): string =>
+  `rounded-md px-3 py-2 text-sm font-medium ${
+    isActive
+      ? 'bg-indigo-600 text-white'
+      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+  }`;
+
+export function MainLayout() {
+  return (
+    <div className="flex min-h-screen flex-col bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <span className="text-lg font-bold text-slate-900">Quản lý sự kiện CLB</span>
+          <nav className="flex gap-2">
+            <NavLink to="/su-kien" className={navLinkClass}>
+              Danh sách
+            </NavLink>
+            <NavLink to="/su-kien/them-moi" className={navLinkClass}>
+              Thêm mới
+            </NavLink>
+          </nav>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+        <Outlet />
+      </main>
+
+      <footer className="border-t border-slate-200 bg-white">
+        <div className="mx-auto max-w-5xl px-4 py-4 text-center text-sm text-slate-500">
+          Bài tập lớn React CRUD · Quản lý sự kiện câu lạc bộ
+        </div>
+      </footer>
+    </div>
+  );
+}
+```
+
+## `src/pages/NotFoundPage.tsx`
+
+```tsx
+import { Link } from 'react-router-dom';
+
+export function NotFoundPage() {
+  return (
+    <section className="flex flex-col items-center gap-4 py-16 text-center">
+      <p className="text-6xl font-bold text-slate-300">404</p>
+      <h1 className="text-2xl font-bold text-slate-900">Không tìm thấy trang</h1>
+      <p className="text-slate-600">Đường dẫn bạn mở không tồn tại.</p>
+      <Link
+        to="/su-kien"
+        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+      >
+        Về danh sách sự kiện
+      </Link>
+    </section>
+  );
+}
+```
+
+## Ghi chú
+
+- **`<Outlet />`** là chỗ trang con hiện ra. Thiếu nó thì header và footer hiện đúng nhưng trang bên trong trống.
+- **`NavLink` tự đánh dấu mục đang mở** bằng `isActive`. Đây là yêu cầu "menu nổi bật trang đang mở" trong đề.
+- **"Danh sách" vẫn sáng khi mở `/su-kien/3`**, vì `NavLink` so khớp theo tiền tố. Chấp nhận được. Nếu muốn chỉ sáng đúng trang, thêm `end` vào `NavLink` đó.
+- **Không có props** nên không cần khai báo kiểu props. Đề yêu cầu kiểu props cho mọi component có props, và hai component này không có.
+- **Tiêu đề và footer** là chữ tự đặt, bạn đổi tùy ý.
+
+Ghi chú xác minh: mình chưa chạy `npm run dev` hay `npm run build`. Sau khi tạo hai file, hãy mở `/su-kien/them-moi`, `/abc` và kiểm tra có header, footer, menu sáng đúng. Nếu lỗi, gửi cho mình thông báo lỗi kèm đường dẫn file.

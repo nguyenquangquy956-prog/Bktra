@@ -1,0 +1,210 @@
+absolute BYTE. đề đã rõ, giờ chốt hướng trước khi gõ dòng code nào. mình giả định bạn bắt đầu project mới từ con số 0.
+
+## Hướng đi cho code ban đầu
+
+### 1. Chốt nền tảng
+
+Stack theo đề: Vite + React + TypeScript + Tailwind + React Router + axios + json-server. Mình không thêm thư viện ngoài đề để tránh rủi ro trong quá trình vấn đáp.
+
+Chạy các lệnh sau:
+
+```bash
+npm create vite@latest su-kien-clb -- --template react-ts
+cd su-kien-clb
+npm install react-router-dom axios
+npm install tailwindcss @tailwindcss/vite
+npm install -D json-server
+git init
+```
+
+Sau đó:
+
+- Thêm plugin Tailwind vào `vite.config.ts`.
+- Trong `src/index.css` chỉ cần dòng `@import "tailwindcss";`.
+- Thêm script vào `package.json`:
+
+```json
+"api": "json-server --watch server/db.json --port 3001"
+```
+
+- Tạo `.gitignore` có `node_modules` và commit ngay commit đầu tiên.
+
+Nếu `npm create vite` sinh ra Tailwind phiên bản khác (v3 cần `postcss` và `tailwind.config`), đừng trộn hai kiểu cấu hình. Chọn một và đi theo nó.
+
+### 2. Cấu trúc thư mục
+
+```
+server/
+  db.json
+src/
+  types/        event.ts, form.ts
+  services/     http.ts, eventService.ts
+  utils/        validateEvent.ts, date.ts, errorMessage.ts
+  components/   TextField.tsx, EventCard.tsx, StatusMessage.tsx, ConfirmDialog.tsx
+  layouts/      MainLayout.tsx        (header + <Outlet/> + footer)
+  pages/        EventListPage.tsx, EventDetailPage.tsx, EventFormPage.tsx, NotFoundPage.tsx
+  App.tsx       (khai báo route)
+  main.tsx
+```
+
+Đề chỉ yêu cầu tối thiểu sáu thư mục, nên thêm như vậy là hợp lệ.
+
+### 3. Route
+
+| Đường dẫn | Trang |
+| --- | --- |
+| `/` | chuyển về `/su-kien` |
+| `/su-kien` | danh sách |
+| `/su-kien/them-moi` | thêm mới (form, chế độ create) |
+| `/su-kien/:id` | chi tiết |
+| `/su-kien/:id/sua` | chỉnh sửa (form, chế độ edit) |
+| `*` | 404 |
+
+Khai báo `them-moi` trước `:id` cho dễ đọc, dù React Router đã ưu tiên route tĩnh.
+
+### 4. Quyết định thiết kế cốt lõi
+
+**Hai kiểu dữ liệu khác nhau cho sự kiện và form.** Đây là chỗ dễ sai nhất. Ô input luôn trả về chuỗi, còn API cần số cho số chỗ. Vì vậy:
+
+- `ClubEvent` là dữ liệu trên server (`maxSeats: number`).
+- `EventFormValues` là state của form (mọi trường là `string`).
+- Chuyển đổi một lần duy nhất, ngay trước khi gọi API.
+
+**Kiểu sự kiện trong `types/`.** Đề yêu cầu kiểu của sự kiện và object lỗi phải khai báo ở đây, nên `ChangeEvent` cũng đặt vào `types/form.ts`.
+
+**Validate là một hàm thuần.** `validateEvent(values, mode)` trả về `EventFormErrors`. Không đụng DOM, không gọi API. Như vậy bạn test được bằng tay với vài input và cũng dùng chung cho cả hai chế độ.
+
+**So sánh ngày giờ bằng chuỗi.** `YYYY-MM-DD` và `HH:mm` so sánh theo thứ tự chữ cái là đúng. Không cần chuyển sang `Date` cho phần này.
+
+**Edit dùng PUT.** Form có đủ mọi trường nên PUT gọn hơn PATCH. Nhớ giữ nguyên `id` trong body.
+
+### 5. Code khởi đầu
+
+**`src/types/event.ts`**
+
+```ts
+export type EventFormat = 'offline' | 'online';
+
+export interface ClubEvent {
+  id: number;
+  title: string;
+  date: string;        // YYYY-MM-DD
+  startTime: string;   // HH:mm
+  endTime: string;     // HH:mm
+  format: EventFormat;
+  location: string;    // rỗng khi online
+  link: string;        // rỗng khi offline
+  maxSeats: number;
+}
+
+export type ClubEventInput = Omit<ClubEvent, 'id'>;
+```
+
+**`src/types/form.ts`**
+
+```ts
+import type { ChangeEvent } from 'react';
+import type { EventFormat } from './event';
+
+export interface EventFormValues {
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  format: EventFormat;
+  location: string;
+  link: string;
+  maxSeats: string;
+}
+
+export type EventFormErrors = Partial<Record<keyof EventFormValues, string>>;
+
+export type FieldChangeEvent = ChangeEvent<HTMLInputElement>;
+```
+
+**`src/services/http.ts`**
+
+```ts
+import axios from 'axios';
+
+export const API_BASE_URL = 'http://localhost:3001';
+
+export const http = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 5000,
+  headers: { 'Content-Type': 'application/json' },
+});
+```
+
+**`src/services/eventService.ts`** (khung, chưa đủ hàm)
+
+```ts
+import { http } from './http';
+import type { ClubEvent, ClubEventInput } from '../types/event';
+
+export const getEvents = async (): Promise<ClubEvent[]> => {
+  const { data } = await http.get<ClubEvent[]>('/events');
+  return data;
+};
+
+export const getEventById = async (id: number): Promise<ClubEvent> => {
+  const { data } = await http.get<ClubEvent>(`/events/${id}`);
+  return data;
+};
+
+// createEvent(input: ClubEventInput) -> http.post
+// updateEvent(id, input: ClubEventInput) -> http.put
+// deleteEvent(id) -> http.delete
+```
+
+Ba hàm cuối còn lại bạn tự viết theo mẫu trên. Trong các hàm đó đừng `try/catch` rồi nuốt lỗi. Để lỗi nổi lên và xử lý ở `utils/errorMessage.ts` bằng `axios.isAxiosError(error)`, với `error: unknown`. Cách này vừa đúng quy định "không dùng any" vừa cho thông báo lỗi tiếng Việt.
+
+**`server/db.json`** (một bản ghi mẫu, bạn tự thêm đủ 8 bản ghi)
+
+```json
+{
+  "events": [
+    {
+      "id": 1,
+      "title": "Workshop React cơ bản",
+      "date": "2026-12-05",
+      "startTime": "18:30",
+      "endTime": "20:30",
+      "format": "online",
+      "location": "",
+      "link": "https://meet.google.com/abc-defg-hij",
+      "maxSeats": 100
+    }
+  ]
+}
+```
+
+Lưu ý khi tự soạn 8 bản ghi: đặt ngày có cả quá khứ lẫn tương lai so với 21/11/2026, và trộn cả `online` lẫn `offline`.
+
+### 6. Thứ tự làm
+
+Mỗi mốc xong thì commit một lần, và ghi `AI_LOG.md` ngay từ đầu chứ đừng để đến cuối.
+
+0. `npm run dev` và `npm run api` cùng chạy, mở `localhost:3001/events` thấy dữ liệu.
+1. Layout, route, trang 404. Chưa cần dữ liệu.
+2. Trang danh sách: GET, chia nhóm "Sắp diễn ra" và "Đã diễn ra", đủ ba trạng thái loading, lỗi, trống.
+3. Trang chi tiết: GET theo id, thông báo không tìm thấy.
+4. Component `TextField` và hàm `validateEvent`. Form thêm mới chạy với validate, chưa gọi API. Lỗi hiện khi `onBlur`.
+5. POST cho thêm mới. Sau đó form chỉnh sửa: lấy dữ liệu, điền sẵn, PUT.
+6. DELETE với `ConfirmDialog` tự viết.
+7. Thông báo thành công (component tự viết), khóa nút khi đang gửi, responsive.
+8. Điểm cộng nếu còn thời gian: phân trang, tìm kiếm qua query của API, hoặc thêm `registrations`.
+9. README, ảnh chụp màn hình, video, `AI_LOG.md`.
+
+### 7. Bẫy cần tránh
+
+- **Lấy ngày hôm nay bằng `toISOString()`.** Hàm này trả về ngày theo UTC. Ở Việt Nam, từ 00:00 đến 07:00 sáng nó sẽ trả về ngày hôm qua, nên sự kiện hôm nay sẽ bị đánh dấu sai. Hãy tự ghép `YYYY-MM-DD` từ `getFullYear()`, `getMonth() + 1`, `getDate()`, đệm số 0 cho đủ hai chữ số.
+- **Số chỗ.** `Number('')` trả về `0`, `Number('1.5')` không phải số nguyên, `Number('abc')` là `NaN`. Validate phải kiểm tra trống trước, rồi kiểm tra `Number.isInteger`, rồi mới kiểm tra khoảng 1 đến 500.
+- **Đổi hình thức.** Khi chuyển từ Trực tuyến sang Trực tiếp, giá trị ô Đường dẫn vẫn còn trong state. Khi submit, chỉ gửi trường liên quan và để trống trường còn lại.
+- **Form chỉnh sửa điền dữ liệu bất đồng bộ.** Chỉ render form sau khi GET xong, hoặc truyền `initialValues` qua `key` để React khởi tạo lại đúng lúc. Nếu không, state sẽ giữ giá trị rỗng.
+- **`useEffect` gọi API.** Dùng cờ `ignore` hoặc `AbortController` trong cleanup để tránh cập nhật state khi component đã unmount. StrictMode trong dev sẽ gọi effect hai lần, nên đây là lỗi bạn sẽ thấy ngay.
+- **Tailwind và Vite.** Đừng mở nhiều hướng cấu hình cùng lúc. Kiểm tra `package.json` sau khi cài xem phiên bản nào đang dùng.
+
+### Ghi chú xác minh
+
+Mình chỉ đưa ra hướng và khung code, chưa chạy `npm create`, chưa build, chưa test gì cả. Khi bạn làm xong mốc 0, hãy chạy hai lệnh `npm run dev` và `npm run api` trước, rồi quay lại báo mình kết quả để chốt bước tiếp theo.

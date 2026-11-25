@@ -1,0 +1,50 @@
+absolute BYTE. `App.tsx` là nơi khai báo **bảng route**, tức là URL nào mở trang nào. Đây là file bạn cần sửa để `/su-kien/them-moi` mở được trang form.
+
+Bản dưới đây chỉ dùng các file đã có hoặc sẽ có ở bước 1: `MainLayout` và `NotFoundPage`. Chưa import trang danh sách hay chi tiết vì chúng chưa được viết.
+
+```tsx
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { MainLayout } from './layouts/MainLayout';
+import { EventFormPage } from './pages/EventFormPage';
+import { NotFoundPage } from './pages/NotFoundPage';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route element={<MainLayout />}>
+          <Route path="/" element={<Navigate to="/su-kien" replace />} />
+          <Route path="/su-kien/them-moi" element={<EventFormPage />} />
+          {/* Bước 2, 3, 5 sẽ thêm: /su-kien, /su-kien/:id, /su-kien/:id/sua */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
+
+## Các phần chính
+
+- **`BrowserRouter`** bật tính năng đổi URL mà không tải lại trang. Nó phải bao ngoài toàn bộ `Routes`.
+- **`<Route element={<MainLayout />}>`** là route không có `path`. Nó chỉ bọc các route con bằng header và footer, nên mọi trang đều có layout chung.
+- **`<Outlet />`** trong `MainLayout` là chỗ trang con được hiển thị. Nếu thiếu `Outlet`, trang sẽ không hiện.
+- **`Navigate`** làm route `/` tự chuyển sang `/su-kien`, đúng bảng route đã thống nhất.
+- **`path="*"`** bắt mọi URL còn lại và hiện trang 404.
+
+## Lưu ý trước khi chạy
+
+- **Phải tạo `MainLayout.tsx` và `NotFoundPage.tsx` trước.** Thiếu một trong hai file, `npm run build` sẽ báo lỗi import.
+- **Ở bước này, `/` sẽ chuyển sang `/su-kien` và hiện 404.** Đây là bình thường vì trang danh sách chưa tồn tại. Đừng sửa `Navigate` lúc này.
+- **Route `/su-kien/:id` phải đặt sau `them-moi`.** Dù React Router ưu tiên route tĩnh, đặt đúng thứ tự giúp code dễ đọc.
+- **`main.tsx` không cần sửa.** Template Vite đã render `<App />`, và `BrowserRouter` nằm trong `App.tsx`, nên không bọc thêm lần nữa.
+
+## Cách kiểm tra
+
+Sau khi chạy `npm run dev`, mở lần lượt:
+
+- `/su-kien/them-moi`: thấy form thêm mới, có header và footer.
+- `/abc`: thấy trang 404.
+- `/`: chuyển sang `/su-kien` rồi hiện 404, vì chưa có trang danh sách.
+
+Ghi chú xác minh: mình viết theo chuẩn React Router v6 và v7, chưa chạy `npm run dev` hay `npm run build` nên chưa xác nhận được. Nếu import lỗi hoặc route không khớp, hãy gửi lỗi cho mình.

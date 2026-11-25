@@ -1,0 +1,49 @@
+{
+  "events": [
+    {
+      "id": "1",
+      "title": "Workshop React cơ bản",
+      "date": "2026-12-05",
+      "startTime": "18:30",
+      "endTime": "20:30",
+      "format": "online",
+      "location": "",
+      "link": "https://meet.google.com/abc-defg-hij",
+      "maxSeats": 100
+    },
+    {
+      "title": "asdasdasdd",
+      "date": "2312-12-31",
+      "startTime": "01:12",
+      "endTime": "12:31",
+      "format": "online",
+      "location": "",
+      "link": "https://www.youtube.com/watch?v=Wo5igUI1yDU",
+      "maxSeats": 122,
+      "id": "a"
+    },
+    {
+      "title": "asdas",
+      "date": "2000-12-31",
+      "startTime": "00:31",
+      "endTime": "12:31",
+      "format": "offline",
+      "location": "12313",
+      "link": "",
+      "maxSeats": 122,
+      "id": "PnAFRv4XHl8"
+    },
+    {
+      "title": "qweqwwe",
+      "date": "2222-12-31",
+      "startTime": "12:31",
+      "endTime": "12:55",
+      "format": "offline",
+      "location": "asd21312",
+      "link": "",
+      "maxSeats": 123,
+      "id": "rjGel5GzM-Q"
+    }
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
+}
