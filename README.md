@@ -86,10 +86,8 @@ Mỗi bản ghi có trường `id` kiểu chuỗi do json-server cấp. Đề v�
 
 ## Ảnh chụp màn hình
 
-- Trang danh sách: [ảnh]
-- Form có lỗi validate: [ảnh]
-- Giao diện trên điện thoại: [ảnh]
+- Trang danh sách: 
+- Form có lỗi validate:
+- Giao diện trên điện thoại: 
 
 ## Video giới thiệu
-
-[Đường dẫn Google Drive, quyền xem công khai]
